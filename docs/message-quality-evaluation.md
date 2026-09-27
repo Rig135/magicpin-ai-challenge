@@ -90,3 +90,56 @@
   Engagement             [[92m██████████████[2m░░░░░░[0m] [92m 7/10[0m
 
   [1mTOTAL: 38/50[0m
+[93m[WARN][0m Tick failed: timed out
+[94m[INFO][0m Batch 3: 5 actions (7980ms)
+[35m[LLM][0m Analyzing message...
+[93m[WARN][0m LLM error: HTTP Error 429: Too Many Requests
+
+[96mMessage:[0m "Hi Suresh, quick update on SK Pizza Junction. We'v..."
+  Specificity            [[92m██████████████████[2m░░[0m] [92m 9/10[0m
+  Category Fit           [[93m██████████[2m░░░░░░░░░░[0m] [93m 5/10[0m
+  Merchant Fit           [[93m██████████[2m░░░░░░░░░░[0m] [93m 5/10[0m
+  Decision Quality       [[93m██████████[2m░░░░░░░░░░[0m] [93m 5/10[0m
+  Engagement             [[93m██████████[2m░░░░░░░░░░[0m] [93m 5/10[0m
+
+  [1mTOTAL: 29/50[0m
+[35m[LLM][0m Analyzing message...
+
+[96mMessage:[0m "We have an update regarding your account. Please c..."
+  Specificity            [[91m██[2m░░░░░░░░░░░░░░░░░░[0m] [91m 1/10[0m
+  Category Fit           [[91m██████[2m░░░░░░░░░░░░░░[0m] [91m 3/10[0m
+  Merchant Fit           [[91m████[2m░░░░░░░░░░░░░░░░[0m] [91m 2/10[0m
+  Decision Quality       [[91m██[2m░░░░░░░░░░░░░░░░░░[0m] [91m 1/10[0m
+  Engagement             [[91m██[2m░░░░░░░░░░░░░░░░░░[0m] [91m 1/10[0m
+
+  [1mTOTAL: 8/50[0m
+[35m[LLM][0m Analyzing message...
+
+[96mMessage:[0m "We have an update regarding your account. Please c..."
+  Specificity            [[91m██[2m░░░░░░░░░░░░░░░░░░[0m] [91m 1/10[0m
+  Category Fit           [[91m██████[2m░░░░░░░░░░░░░░[0m] [91m 3/10[0m
+  Merchant Fit           [[91m████[2m░░░░░░░░░░░░░░░░[0m] [91m 2/10[0m
+  Decision Quality       [[91m██[2m░░░░░░░░░░░░░░░░░░[0m] [91m 1/10[0m
+  Engagement             [[91m██[2m░░░░░░░░░░░░░░░░░░[0m] [91m 1/10[0m
+
+  [1mTOTAL: 8/50[0m
+[35m[LLM][0m Analyzing message...
+
+[96mMessage:[0m "We have an update regarding your account. Please c..."
+  Specificity            [[91m██[2m░░░░░░░░░░░░░░░░░░[0m] [91m 1/10[0m
+  Category Fit           [[91m██████[2m░░░░░░░░░░░░░░[0m] [91m 3/10[0m
+  Merchant Fit           [[91m████[2m░░░░░░░░░░░░░░░░[0m] [91m 2/10[0m
+  Decision Quality       [[91m████[2m░░░░░░░░░░░░░░░░[0m] [91m 2/10[0m
+  Engagement             [[91m██[2m░░░░░░░░░░░░░░░░░░[0m] [91m 1/10[0m
+
+  [1mTOTAL: 9/50[0m
+[35m[LLM][0m Analyzing message...
+
+[96mMessage:[0m "We have an update regarding your account. Please c..."
+  Specificity            [[91m██[2m░░░░░░░░░░░░░░░░░░[0m] [91m 1/10[0m
+  Category Fit           [[91m██████[2m░░░░░░░░░░░░░░[0m] [91m 3/10[0m
+  Merchant Fit           [[91m████[2m░░░░░░░░░░░░░░░░[0m] [91m 2/10[0m
+  Decision Quality       [[91m████[2m░░░░░░░░░░░░░░░░[0m] [91m 2/10[0m
+  Engagement             [[91m██[2m░░░░░░░░░░░░░░░░░░[0m] [91m 1/10[0m
+
+  [1mTOTAL: 9/50[0m

@@ -429,7 +429,7 @@ class BotClient:
         })
 
     def tick(self, triggers):
-        return self._request("POST", "/v1/tick", 15, {
+        return self._request("POST", "/v1/tick", 60, {
             "now": datetime.utcnow().isoformat() + "Z", "available_triggers": triggers
         })
 

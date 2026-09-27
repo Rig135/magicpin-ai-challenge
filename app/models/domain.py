@@ -31,6 +31,7 @@ class TriggerContext(BaseModel):
     source: str
     payload: Dict[str, Any]
     suppression_key: str = "default_suppression"
+    expires_at: Optional[str] = None
 
 class ComposedMessage(BaseModel):
     body: str

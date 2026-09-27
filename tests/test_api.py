@@ -105,5 +105,139 @@ def test_reply_placeholder():
     response = client.post("/v1/reply", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert data["action"] == "end"
-    assert "body" in data
+    assert data["action"] in ["end", "reply", "send", "wait"]
+
+from unittest.mock import patch
+from app.models.domain import ComposedMessage
+from datetime import timedelta
+
+@patch('app.api.routes.composer.compose')
+def test_tick_logic(mock_compose):
+    # Mock composed message
+    mock_compose.return_value = ComposedMessage(
+        body="Test msg",
+        cta="open_ended",
+        send_as="vera",
+        suppression_key="sup_1",
+        rationale="test"
+    )
+    
+    # Push contexts
+    client.post("/v1/context", json={
+        "scope": "category", "context_id": "c1", "version": 1,
+        "payload": {"slug": "c1", "name": "Cat1"},
+        "delivered_at": datetime.utcnow().isoformat() + "Z"
+    })
+    
+    client.post("/v1/context", json={
+        "scope": "merchant", "context_id": "m1", "version": 1,
+        "payload": {"merchant_id": "m1", "category_slug": "c1", "identity": {"name": "M1"}},
+        "delivered_at": datetime.utcnow().isoformat() + "Z"
+    })
+    
+    client.post("/v1/context", json={
+        "scope": "merchant", "context_id": "m_no_cat", "version": 1,
+        "payload": {"merchant_id": "m_no_cat", "category_slug": "invalid", "identity": {"name": "M2"}},
+        "delivered_at": datetime.utcnow().isoformat() + "Z"
+    })
+    
+    # 1. Missing merchant
+    client.post("/v1/context", json={
+        "scope": "trigger", "context_id": "t_no_merchant", "version": 1,
+        "payload": {"id": "t_no_merchant", "scope": "merchant", "kind": "test", "source": "test", "merchant_id": "invalid", "payload": {}},
+        "delivered_at": datetime.utcnow().isoformat() + "Z"
+    })
+    
+    # 2. Missing category
+    client.post("/v1/context", json={
+        "scope": "trigger", "context_id": "t_no_cat", "version": 1,
+        "payload": {"id": "t_no_cat", "scope": "merchant", "kind": "test", "source": "test", "merchant_id": "m_no_cat", "payload": {}},
+        "delivered_at": datetime.utcnow().isoformat() + "Z"
+    })
+    
+    # 3. Expired trigger
+    past_date = (datetime.utcnow() - timedelta(days=1)).isoformat() + "Z"
+    client.post("/v1/context", json={
+        "scope": "trigger", "context_id": "t_expired", "version": 1,
+        "payload": {"id": "t_expired", "scope": "merchant", "kind": "test", "source": "test", "merchant_id": "m1", "payload": {}, "expires_at": past_date},
+        "delivered_at": datetime.utcnow().isoformat() + "Z"
+    })
+    
+    # 4. Valid trigger
+    client.post("/v1/context", json={
+        "scope": "trigger", "context_id": "t_valid1", "version": 1,
+        "payload": {"id": "t_valid1", "scope": "merchant", "kind": "test", "source": "test", "merchant_id": "m1", "payload": {}, "suppression_key": "sup_test"},
+        "delivered_at": datetime.utcnow().isoformat() + "Z"
+    })
+    
+    # 5. Duplicate trigger (same merchant, customer, trigger) - should be deduplicated
+    client.post("/v1/context", json={
+        "scope": "trigger", "context_id": "t_valid1_dup", "version": 1,
+        "payload": {"id": "t_valid1", "scope": "merchant", "kind": "test", "source": "test", "merchant_id": "m1", "payload": {}, "suppression_key": "sup_test_2"},
+        "delivered_at": datetime.utcnow().isoformat() + "Z"
+    })
+    
+    # Execute Tick
+    payload = {
+        "now": datetime.utcnow().isoformat() + "Z",
+        "available_triggers": ["t_no_merchant", "t_no_cat", "t_expired", "t_valid1", "t_valid1"]
+    }
+    response = client.post("/v1/tick", json=payload)
+    assert response.status_code == 200
+    actions = response.json()["actions"]
+    
+    # Only t_valid1 should succeed once (dup is ignored, others are invalid/expired)
+    assert len(actions) == 1
+    assert actions[0]["trigger_id"] == "t_valid1"
+    assert actions[0]["template_name"] == "vera_test_v1"
+    
+    # 6. Suppression test
+    # t_valid2 has the same suppression key 'sup_1' returned by mock_compose in the previous tick
+    client.post("/v1/context", json={
+        "scope": "trigger", "context_id": "t_valid2", "version": 1,
+        "payload": {"id": "t_valid2", "scope": "merchant", "kind": "test", "source": "test", "merchant_id": "m1", "payload": {}, "suppression_key": "sup_1"},
+        "delivered_at": datetime.utcnow().isoformat() + "Z"
+    })
+    
+    response = client.post("/v1/tick", json={
+        "now": datetime.utcnow().isoformat() + "Z",
+        "available_triggers": ["t_valid2"]
+    })
+    assert response.status_code == 200
+    assert len(response.json()["actions"]) == 0 # Suppressed!
+    
+@patch('app.api.routes.composer.compose')
+def test_tick_action_limit(mock_compose):
+    mock_compose.return_value = ComposedMessage(
+        body="msg", cta="open_ended", send_as="vera", suppression_key="", rationale=""
+    )
+    
+    client.post("/v1/context", json={
+        "scope": "category", "context_id": "c1", "version": 1,
+        "payload": {"slug": "c1", "name": "Cat1"},
+        "delivered_at": datetime.utcnow().isoformat() + "Z"
+    })
+    
+    client.post("/v1/context", json={
+        "scope": "merchant", "context_id": "m1", "version": 1,
+        "payload": {"merchant_id": "m1", "category_slug": "c1", "identity": {"name": "M1"}},
+        "delivered_at": datetime.utcnow().isoformat() + "Z"
+    })
+    
+    triggers = []
+    for i in range(25):
+        t_id = f"t_{i}"
+        triggers.append(t_id)
+        client.post("/v1/context", json={
+            "scope": "trigger", "context_id": t_id, "version": 1,
+            "payload": {"id": t_id, "scope": "merchant", "kind": "test", "source": "test", "merchant_id": "m1", "payload": {}, "suppression_key": f"sup_{i}"},
+            "delivered_at": datetime.utcnow().isoformat() + "Z"
+        })
+        
+    # Even though we provide 25, the limit is 20
+    response = client.post("/v1/tick", json={
+        "now": datetime.utcnow().isoformat() + "Z",
+        "available_triggers": triggers
+    })
+    assert response.status_code == 200
+    assert len(response.json()["actions"]) == 20

@@ -67,23 +67,57 @@ logger = logging.getLogger(__name__)
 llm_client = LLMClient()
 composer = Composer(llm_client)
 
+sent_suppressions = set()
+
+def parse_iso(dt_str: str) -> datetime:
+    return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+
 @router.post("/tick", response_model=TickResponse)
 def tick(req: TickRequest):
     actions = []
+    processed_this_tick = set()
+    
+    req_now = parse_iso(req.now) if req.now else datetime.utcnow()
+    
     for trigger_id in req.available_triggers:
+        if len(actions) >= 20:
+            break
+            
         trigger_payload = context_store.get("trigger", trigger_id)
         if not trigger_payload:
             continue
             
         try:
             trigger = TriggerContext(**trigger_payload)
+            
+            # 1. Expiration check
+            if trigger.expires_at:
+                try:
+                    expires_dt = parse_iso(trigger.expires_at)
+                    if req_now > expires_dt:
+                        logger.info(f"Tick trace - trigger {trigger_id} EXPIRED.")
+                        continue
+                except Exception as e:
+                    logger.warning(f"Failed to parse expires_at for {trigger_id}: {e}")
+            
             merchant_id = trigger_payload.get("merchant_id") or trigger_payload.get("payload", {}).get("merchant_id")
             customer_id = trigger_payload.get("customer_id") or trigger_payload.get("payload", {}).get("customer_id")
             
-            logger.info(f"Tick trace - trigger_id: {trigger_id}, merchant_id: {merchant_id}")
+            if not merchant_id:
+                continue
+                
+            # 2. Duplicate action check
+            dedup_key = (merchant_id, trigger_id, customer_id)
+            if dedup_key in processed_this_tick:
+                continue
+                
+            # 3. Suppression check
+            if trigger.suppression_key and trigger.suppression_key in sent_suppressions:
+                logger.info(f"Tick trace - {trigger_id} SUPPRESSED by key {trigger.suppression_key}")
+                continue
             
-            # Look up merchant
-            merchant_payload = context_store.get("merchant", merchant_id) if merchant_id else None
+            # 4. Context resolution
+            merchant_payload = context_store.get("merchant", merchant_id)
             if not merchant_payload:
                 logger.info(f"Tick trace - merchant_payload NOT FOUND for {merchant_id}")
                 continue
@@ -95,6 +129,7 @@ def tick(req: TickRequest):
                 continue
                 
             category = CategoryContext(**category_payload)
+            
             customer = None
             if customer_id:
                 customer_payload = context_store.get("customer", customer_id)
@@ -102,13 +137,23 @@ def tick(req: TickRequest):
                     customer = CustomerContext(**customer_payload)
                 else:
                     logger.info(f"Tick trace - customer_payload NOT FOUND for {customer_id}")
+                    continue  # Missing required customer context
             
-            history = []
+            # deterministic conv id
+            conv_id = f"conv_{merchant_id}_{customer_id or 'merchant'}"
+            history = conversation_store.get_history(conv_id)
+            
             logger.info(f"Tick trace - calling composer for trigger {trigger_id}")
-            
             msg = composer.compose(category, merchant, trigger, customer, history)
             
-            conv_id = str(uuid.uuid4())
+            # WhatsApp Template logic
+            template_name = None
+            template_params = None
+            if not history:
+                template_name = f"vera_{trigger.kind}_v1"
+                template_params = [merchant.identity.get("name", "Merchant")]
+                if customer:
+                    template_params.append(customer.identity.get("name", "Customer"))
             
             action = Action(
                 conversation_id=conv_id,
@@ -116,13 +161,19 @@ def tick(req: TickRequest):
                 customer_id=customer_id,
                 send_as=msg.send_as,
                 trigger_id=trigger_id,
-                template_name="custom",
+                template_name=template_name,
+                template_params=template_params,
                 body=msg.body,
                 cta=msg.cta,
                 suppression_key=msg.suppression_key,
                 rationale=msg.rationale
             )
             actions.append(action)
+            
+            processed_this_tick.add(dedup_key)
+            if msg.suppression_key:
+                sent_suppressions.add(msg.suppression_key)
+                
         except Exception as e:
             logger.error(f"Error composing for trigger {trigger_id}: {e}")
             
