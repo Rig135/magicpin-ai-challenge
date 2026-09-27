@@ -142,6 +142,30 @@ You must return your response as STRICT JSON matching this schema:
                  
         return errors
 
+    def grounding_check(self, body: str, context_data: dict) -> tuple[bool, str]:
+        system_prompt = "You are a grounding verification system. Your job is to catch hallucinations."
+        prompt = f"""
+Given the following context data:
+{json.dumps(context_data)}
+
+And this generated message: "{body}"
+
+GROUNDING RULES:
+1. USE NEW DATA -> adapt.
+2. MISSING DATA -> omit it.
+3. CONFLICTING DATA -> use latest accepted version (which is what is provided in the context).
+4. UNKNOWN DATA -> never invent it.
+
+Does the message contain ANY specific numbers, dates, names, competitor names, statistics, or claims that are NOT explicitly present in the context?
+Answer strictly with a JSON object: {{"has_hallucination": true/false, "reason": "<explanation>"}}
+"""
+        try:
+             res = self.llm_client.generate_json(system_prompt, prompt)
+             return res.get("has_hallucination", False), res.get("reason", "")
+        except Exception as e:
+             logger.error(f"Grounding check failed: {e}")
+             return False, ""
+
     def compose(self, category: CategoryContext, merchant: MerchantContext, trigger: TriggerContext, customer: CustomerContext = None, history: list = None) -> ComposedMessage:
         strategy_type = TriggerRouter.route(trigger)
         strategy_instruction = StrategyBuilder.get_strategy(strategy_type)
@@ -166,9 +190,13 @@ You must return your response as STRICT JSON matching this schema:
             # Validation Step
             validation_errors = self.validate_output(llm_response, trigger, customer)
             
+            has_hallucination, hallucination_reason = self.grounding_check(llm_response.get("body", ""), context_data)
+            if has_hallucination:
+                 validation_errors.append(f"Grounding violation (hallucinated data): {hallucination_reason}")
+            
             if validation_errors:
                 logger.warning(f"Validation failed: {validation_errors}. Retrying...")
-                retry_prompt = user_prompt + f"\n\nYOUR PREVIOUS ATTEMPT FAILED VALIDATION: {', '.join(validation_errors)}. Please fix these issues."
+                retry_prompt = user_prompt + f"\n\nYOUR PREVIOUS ATTEMPT FAILED VALIDATION: {', '.join(validation_errors)}. Please fix these issues and STRICTLY adhere to GROUNDING RULES: USE NEW DATA -> adapt. MISSING DATA -> omit it. CONFLICTING DATA -> use latest. UNKNOWN DATA -> never invent it."
                 llm_response = self.llm_client.generate_json(self.system_prompt, retry_prompt)
                 
             return ComposedMessage(
