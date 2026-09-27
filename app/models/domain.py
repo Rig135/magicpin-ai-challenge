@@ -20,7 +20,7 @@ class CustomerContext(BaseModel):
     merchant_id: str
     identity: Dict[str, Any]
     relationship: Optional[Dict[str, Any]] = None
-    state: Optional[Dict[str, Any]] = None
+    state: Optional[Any] = None
     preferences: Optional[Dict[str, Any]] = None
     consent: Optional[Dict[str, Any]] = None
 
