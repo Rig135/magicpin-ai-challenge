@@ -1,6 +1,6 @@
 import json
 import logging
-from app.models.domain import CategoryContext, MerchantContext, TriggerContext, CustomerContext, ComposedMessage
+from app.models.domain import CategoryContext, MerchantContext, TriggerContext, CustomerContext, ComposedMessage, ComposedReply
 from app.services.llm import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -186,4 +186,49 @@ You must return your response as STRICT JSON matching this schema:
                 send_as=send_as,
                 suppression_key=trigger.suppression_key,
                 rationale="Fallback due to generation error"
+            )
+
+    def compose_reply(self, message: str, history: list, merchant: MerchantContext = None, lang_pref: str = "en") -> ComposedReply:
+        system_prompt = """You are Vera, an intelligent AI assistant handling a multi-turn conversation.
+Your goal is to determine the intent of the user's latest message and formulate the best reply.
+
+You must return your response as STRICT JSON matching this schema:
+{
+  "action": "send" | "wait" | "end",
+  "body": "<the message text, if action is send/reply>",
+  "cta": "<call to action text or identifier, or 'none'>",
+  "rationale": "<brief explanation of why you chose this action>"
+}
+
+Rules:
+1. If the user asks a relevant question, answer it using the available context. Action: "send".
+2. If the user is off-topic, politely bring them back to the mission. Action: "send".
+3. Do NOT invent information.
+4. Match the user's language preference if they switched languages (e.g. Hindi/Hinglish).
+"""
+        
+        context_data = {
+            "merchant": merchant.model_dump() if merchant else None,
+            "history": history,
+            "latest_message": message,
+            "language_preference": lang_pref
+        }
+        
+        user_prompt = f"Context:\n{json.dumps(context_data, indent=2)}\n\nDetermine the intent and compose the reply."
+        
+        try:
+            llm_response = self.llm_client.generate_json(system_prompt, user_prompt)
+            return ComposedReply(
+                action=llm_response.get("action", "send"),
+                body=llm_response.get("body", "I can certainly help you with that. Could you provide a bit more detail?"),
+                cta=llm_response.get("cta", "reply"),
+                rationale=llm_response.get("rationale", "Fallback rationale")
+            )
+        except Exception as e:
+            logger.error(f"Reply Composer failed: {e}")
+            return ComposedReply(
+                action="send",
+                body="I'm having trouble processing that right now. Can we try again?",
+                cta="reply",
+                rationale="Fallback due to error"
             )

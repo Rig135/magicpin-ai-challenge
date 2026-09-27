@@ -185,29 +185,67 @@ def reply(req: ReplyRequest):
         req.conversation_id, req.from_role, req.message, req.received_at
     )
     
-    message_lower = req.message.lower()
+    meta = conversation_store.get_metadata(req.conversation_id)
+    message_lower = req.message.lower().strip()
     
-    if "stop" in message_lower or "unsubscribe" in message_lower or "spam" in message_lower:
+    # 1. AUTO_REPLY detection
+    if meta["repeated_message_count"] >= 2:
         return ReplyResponse(
             action="end",
-            body="I have updated your preferences. You won't receive these messages anymore.",
+            body="It seems we are receiving automated responses. We'll pause here.",
             cta="none",
-            rationale="User opted out or was hostile"
+            rationale="Repeated message detected 3+ times"
         )
+        
+    auto_reply_phrases = ["thank you for contacting", "away", "out of office", "auto-reply", "automated message"]
+    if any(phrase in message_lower for phrase in auto_reply_phrases):
+        return ReplyResponse(
+            action="end",
+            body="",
+            cta="none",
+            rationale="Auto-reply text detected"
+        )
+        
+    # 2. NEGATIVE_INTENT detection
+    negative_phrases = ["not interested", "stop", "don't message me", "no thanks", "unsubscribe", "spam", "nahi", "mat bhejo"]
+    if any(phrase in message_lower for phrase in negative_phrases):
+        conversation_store.update_metadata(req.conversation_id, {"current_intent": "negative"})
+        return ReplyResponse(
+            action="end",
+            body="I understand. I have updated your preferences and won't message you about this anymore.",
+            cta="none",
+            rationale="Negative intent detected deterministically"
+        )
+        
+    # 3. POSITIVE_ACTION_INTENT detection
+    positive_phrases = ["yes", "go ahead", "let's do it", "lets do it", "proceed", "send it", "i want to join", "haan", "karo", "theek hai"]
+    if any(p in message_lower for p in positive_phrases):
+        conversation_store.update_metadata(req.conversation_id, {"current_intent": "positive"})
+        return ReplyResponse(
+            action="send",
+            body="Great! Consider it done. I am proceeding with the next steps.",
+            cta="none",
+            rationale="Positive intent detected deterministically"
+        )
+        
+    # Language shift detection (basic)
+    lang_pref = "en"
+    if any(hindi_word in message_lower.split() for hindi_word in ["haan", "nahi", "kya", "kaise", "kab", "karo"]):
+        lang_pref = "hi/hinglish"
+        
+    # If no deterministic match, call Composer for nuanced classification and response
+    merchant_payload = context_store.get("merchant", req.merchant_id)
+    merchant_context = MerchantContext(**merchant_payload) if merchant_payload else None
     
-    # Auto-reply detection
-    if "away" in message_lower or "auto-reply" in message_lower or "out of office" in message_lower:
-         return ReplyResponse(
-             action="end",
-             body="",
-             cta="none",
-             rationale="Auto-reply detected"
-         )
-         
-    # Intent transition 
+    msg = composer.compose_reply(req.message, meta["history"], merchant_context, lang_pref)
+    
+    conversation_store.add_message(
+        req.conversation_id, "vera", msg.body, datetime.utcnow().isoformat() + "Z"
+    )
+    
     return ReplyResponse(
-        action="reply",
-        body="I can certainly help you with that. Could you provide a bit more detail on what you'd like to do next?",
-        cta="reply",
-        rationale="Engaging with user request"
+        action=msg.action,
+        body=msg.body,
+        cta=msg.cta,
+        rationale=msg.rationale
     )

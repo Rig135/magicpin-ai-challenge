@@ -39,3 +39,9 @@ class ComposedMessage(BaseModel):
     send_as: str
     suppression_key: str
     rationale: str
+
+class ComposedReply(BaseModel):
+    action: str
+    body: str
+    cta: str
+    rationale: str

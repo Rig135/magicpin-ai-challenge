@@ -2,7 +2,9 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.api.routes import context_store, conversation_store
 import pytest
-from datetime import datetime
+from datetime import datetime, timedelta
+from unittest.mock import patch
+from app.models.domain import ComposedMessage
 
 client = TestClient(app)
 
@@ -93,23 +95,69 @@ def test_tick_empty():
     assert response.status_code == 200
     assert response.json()["actions"] == []
 
-def test_reply_placeholder():
+@patch('app.api.routes.composer.compose_reply')
+def test_reply_auto_reply_phrase(mock_compose):
     payload = {
-        "conversation_id": "c1",
-        "merchant_id": "m1",
-        "from_role": "merchant",
-        "message": "hello",
-        "received_at": datetime.utcnow().isoformat() + "Z",
-        "turn_number": 1
+        "conversation_id": "c_auto", "merchant_id": "m1", "from_role": "merchant",
+        "message": "Thank you for contacting us. We are currently away.",
+        "received_at": datetime.utcnow().isoformat() + "Z", "turn_number": 1
     }
-    response = client.post("/v1/reply", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["action"] in ["end", "reply", "send", "wait"]
+    resp = client.post("/v1/reply", json=payload)
+    assert resp.status_code == 200
+    assert resp.json()["action"] == "end"
+    
+@patch('app.api.routes.composer.compose_reply')
+def test_reply_repeated_auto_reply(mock_compose):
+    from app.models.domain import ComposedReply
+    mock_compose.return_value = ComposedReply(action="send", body="LLM", cta="reply", rationale="llm")
+    payload = {
+        "conversation_id": "c_repeat", "merchant_id": "m1", "from_role": "merchant",
+        "message": "generic response",
+        "received_at": datetime.utcnow().isoformat() + "Z", "turn_number": 1
+    }
+    client.post("/v1/reply", json=payload) # 1
+    client.post("/v1/reply", json=payload) # 2
+    resp = client.post("/v1/reply", json=payload) # 3
+    assert resp.status_code == 200
+    assert resp.json()["action"] == "end"
+    
+@patch('app.api.routes.composer.compose_reply')
+def test_reply_positive_intent(mock_compose):
+    payload = {
+        "conversation_id": "c_pos", "merchant_id": "m1", "from_role": "merchant",
+        "message": "yes let's do it",
+        "received_at": datetime.utcnow().isoformat() + "Z", "turn_number": 1
+    }
+    resp = client.post("/v1/reply", json=payload)
+    assert resp.status_code == 200
+    assert resp.json()["action"] == "send"
+    
+@patch('app.api.routes.composer.compose_reply')
+def test_reply_negative_intent(mock_compose):
+    payload = {
+        "conversation_id": "c_neg", "merchant_id": "m1", "from_role": "merchant",
+        "message": "not interested",
+        "received_at": datetime.utcnow().isoformat() + "Z", "turn_number": 1
+    }
+    resp = client.post("/v1/reply", json=payload)
+    assert resp.status_code == 200
+    assert resp.json()["action"] == "end"
+    
+@patch('app.api.routes.composer.compose_reply')
+def test_reply_llm_fallback(mock_compose):
+    from app.models.domain import ComposedReply
+    mock_compose.return_value = ComposedReply(action="send", body="LLM answer", cta="reply", rationale="llm")
+    
+    payload = {
+        "conversation_id": "c_llm", "merchant_id": "m1", "from_role": "merchant",
+        "message": "What is the timeline for this?",
+        "received_at": datetime.utcnow().isoformat() + "Z", "turn_number": 1
+    }
+    resp = client.post("/v1/reply", json=payload)
+    assert resp.status_code == 200
+    assert resp.json()["action"] == "send"
+    assert resp.json()["body"] == "LLM answer"
 
-from unittest.mock import patch
-from app.models.domain import ComposedMessage
-from datetime import timedelta
 
 @patch('app.api.routes.composer.compose')
 def test_tick_logic(mock_compose):

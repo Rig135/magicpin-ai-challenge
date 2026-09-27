@@ -50,3 +50,31 @@
   Engagement             [[93m████████████[2m░░░░░░░░[0m] [93m 6/10[0m
 
   [1mTOTAL: 40/50[0m
+[94m[INFO][0m Batch 2: 1 actions (2388ms)
+[35m[LLM][0m Analyzing message...
+
+[96mMessage:[0m "Hi Lakshmi, with the wedding season opener now act..."
+  Specificity            [[93m████████████[2m░░░░░░░░[0m] [93m 6/10[0m
+  Category Fit           [[92m████████████████[2m░░░░[0m] [92m 8/10[0m
+  Merchant Fit           [[93m████████[2m░░░░░░░░░░░░[0m] [93m 4/10[0m
+  Decision Quality       [[91m██████[2m░░░░░░░░░░░░░░[0m] [91m 3/10[0m
+  Engagement             [[93m██████████[2m░░░░░░░░░░[0m] [93m 5/10[0m
+
+  [1mTOTAL: 26/50[0m
+[94m[INFO][0m Batch 3: 0 actions (4ms)
+[94m[INFO][0m Batch 4: 0 actions (2ms)
+[94m[INFO][0m Batch 5: 0 actions (2ms)
+
+[96m[1m--- FINAL SUMMARY ---[0m
+
+[94m[INFO][0m Messages scored: 2
+
+  Avg Specificity        [[92m██████████████[2m░░░░░░[0m] [92m 7/10[0m
+  Avg Category Fit       [[92m██████████████████[2m░░[0m] [92m 9/10[0m
+  Avg Merchant Fit       [[93m██████████[2m░░░░░░░░░░[0m] [93m 5/10[0m
+  Avg Decision Quality   [[93m██████████[2m░░░░░░░░░░[0m] [93m 5/10[0m
+  Avg Engagement         [[93m██████████[2m░░░░░░░░░░[0m] [93m 5/10[0m
+
+[1m  AVERAGE SCORE: 31/50 (62%)[0m
+
+  [93mGOOD[0m

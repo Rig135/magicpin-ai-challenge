@@ -43,7 +43,7 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.1-flash-lite")
 OLLAMA_URL = "http://localhost:11434"
 
 # Which test to run by default
-TEST_SCENARIO = "full_evaluation"
+TEST_SCENARIO = "all"
 
 # =============================================================================
 # ██████  END OF CONFIGURATION - DON'T EDIT BELOW THIS LINE ██████
