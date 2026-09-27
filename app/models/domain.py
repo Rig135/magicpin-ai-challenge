@@ -4,7 +4,7 @@ from typing import Dict, Any, List, Optional
 class CategoryContext(BaseModel):
     slug: str
     name: Optional[str] = None
-    voice: Optional[str] = None
+    voice: Optional[Dict[str, Any]] = None
     offer_catalog: Optional[List[Dict[str, Any]]] = None
     digest: Optional[List[Dict[str, Any]]] = None
 
